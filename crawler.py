@@ -21,7 +21,6 @@ class Crawler:
         This method starts the crawling process which is scraping urls from the next available link in frontier and adding
         the scraped links to the frontier
         """
-
         while self.frontier.has_next_url():
             url = self.frontier.get_next_url()
             logger.info("Fetching URL %s ... Fetched: %s, Queue size: %s", url, self.frontier.fetched, len(self.frontier))
@@ -78,6 +77,17 @@ class Crawler:
         """
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
+            return False
+        character_list= url.split("/")
+        character_set= set(character_list)
+        if len(character_list) != len(character_set):
+            return False
+        last_url= character_list[-1].split("=")
+        if len(last_url) >1:
+            for e in last_url:
+                if len(e)> 30:
+                    return False 
+        if re.match("^.*calendar.*$", url.lower()):
             return False
         try:
             return ".ics.uci.edu" in parsed.hostname \
