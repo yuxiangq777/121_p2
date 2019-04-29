@@ -21,9 +21,8 @@ class Crawler:
         This method starts the crawling process which is scraping urls from the next available link in frontier and adding
         the scraped links to the frontier
         """
-        count=0
+
         while self.frontier.has_next_url():
-            count+=1
             url = self.frontier.get_next_url()
             logger.info("Fetching URL %s ... Fetched: %s, Queue size: %s", url, self.frontier.fetched, len(self.frontier))
             url_data = self.fetch_url(url)
@@ -32,7 +31,6 @@ class Crawler:
                 if self.corpus.get_file_name(next_link) is not None:
                     if self.is_valid(next_link):
                         self.frontier.add_url(next_link)
-        print(count)
 
     def fetch_url(self, url):
         """
