@@ -3,7 +3,7 @@ import re
 from urllib.parse import urlparse,urljoin
 from corpus import Corpus
 from lxml import html
-
+from collections import defaultdict
 logger = logging.getLogger(__name__)
 
 class Crawler:
@@ -15,7 +15,8 @@ class Crawler:
     def __init__(self, frontier):
         self.frontier = frontier
         self.corpus = Corpus()
-
+        self.subdomain_dict= defaultdict(int)
+        self.out_link_dict= defaultdict(int)
     def start_crawling(self):
         """
         This method starts the crawling process which is scraping urls from the next available link in frontier and adding
@@ -24,13 +25,20 @@ class Crawler:
         while self.frontier.has_next_url():
             url = self.frontier.get_next_url()
             logger.info("Fetching URL %s ... Fetched: %s, Queue size: %s", url, self.frontier.fetched, len(self.frontier))
+            self.subdomain_dict[urlparse(url).hostname] +=1
             url_data = self.fetch_url(url)
 
             for next_link in self.extract_next_links(url_data):
                 if self.corpus.get_file_name(next_link) is not None:
                     if self.is_valid(next_link):
                         self.frontier.add_url(next_link)
-
+                        self.out_link_dict[url] += 1
+        analytics = open("analytics.txt","w")
+        analytics.write(" the subdomains this crawler visited and number of different URL it has processed from the associated subdomain:\n")
+        for subdomain,count in self.subdomain_dict.items():
+            analytics.write(subdomain+": "+str(count)+"\n")
+        best_page= sorted(self.out_link_dict.items(),key=(lambda t:t[1]),reverse=True)[0]
+        analytics.write("The page with the most valid out links is: "+best_page[0]+" with "+str(best_page[1])+" out links.\n")
     def fetch_url(self, url):
         """
         This method, using the given url, should find the corresponding file in the corpus and return a dictionary
