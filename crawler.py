@@ -17,6 +17,9 @@ class Crawler:
         self.corpus = Corpus()
         self.subdomain_dict= defaultdict(int)
         self.out_link_dict= defaultdict(int)
+        self.valid_dict= defaultdict(int)
+        self.downloaded = set()
+        self.traps = defaultdict(set)
     def start_crawling(self):
         """
         This method starts the crawling process which is scraping urls from the next available link in frontier and adding
@@ -26,6 +29,7 @@ class Crawler:
             url = self.frontier.get_next_url()
             logger.info("Fetching URL %s ... Fetched: %s, Queue size: %s", url, self.frontier.fetched, len(self.frontier))
             self.subdomain_dict[urlparse(url).hostname] +=1
+            self.downloaded.add(url)
             url_data = self.fetch_url(url)
 
             for next_link in self.extract_next_links(url_data):
@@ -34,11 +38,21 @@ class Crawler:
                         self.frontier.add_url(next_link)
                         self.out_link_dict[url] += 1
         analytics = open("analytics.txt","w")
-        analytics.write(" the subdomains this crawler visited and number of different URL it has processed from the associated subdomain:\n")
+        analytics.write("1. The subdomains this crawler visited and number of different URL it has processed from the associated subdomain:\n")
         for subdomain,count in self.subdomain_dict.items():
             analytics.write(subdomain+": "+str(count)+"\n")
-        best_page= sorted(self.out_link_dict.items(),key=(lambda t:t[1]),reverse=True)[0]
-        analytics.write("The page with the most valid out links is: "+best_page[0]+" with "+str(best_page[1])+" out links.\n")
+        if len(self.out_link_dict) != 0:
+            best_page= sorted(self.out_link_dict.items(),key=(lambda t:t[1]),reverse=True)[0]
+            analytics.write("\n2.The page with the most valid out links is: "+best_page[0]+" with "+str(best_page[1])+" out links.\n")
+        analytics.write("\n3.List of downloaded URL:\n")
+        for d_url in self.downloaded:
+            analytics.write(d_url+"\n")
+        analytics.write("\nList of identified trap:\n")
+        for description,trap_set in self.traps.items():
+            analytics.write("\n"+description+": \n")
+            for trap in trap_set:
+                analytics.write(trap+"\n")
+        analytics.close()
     def fetch_url(self, url):
         """
         This method, using the given url, should find the corresponding file in the corpus and return a dictionary
@@ -84,20 +98,30 @@ class Crawler:
         in this method
         """
         parsed = urlparse(url)
+        url_data= self.fetch_url(url)
+        if url_data['size'] == 0 or ascii(url).strip("'") != url:
+            self.traps["Fake url"].add(url)
+            return False
         if parsed.scheme not in set(["http", "https"]):
             return False
         character_list= url.split("/")
         character_set= set(character_list)
         if len(character_list) != len(character_set):
+            self.traps["Potential loop or repeat directories"].add(url)
             return False
-        last_url= character_list[-1].split("=")
-        if len(last_url) >1:
-            for e in last_url:
+        if len(parsed.query) > 0 and ".ics.uci.edu" in parsed.hostname:
+            self.valid_dict[parsed.hostname+parsed.path] +=1
+            if self.valid_dict[parsed.hostname+parsed.path] > 150:
+                self.traps["Dynamic page or too many queries"].add(url)
+                return False
+            query_list = parsed.query.split("=")
+            for e in query_list:
                 if len(e)> 30:
+                    self.traps["Dynamic page or too many queries"].add(url)
                     return False 
-        if re.match("^.*calendar.*$", url.lower()):
-            return False
+        
         try:
+            
             return ".ics.uci.edu" in parsed.hostname \
                    and not re.match(".*\.(css|js|bmp|gif|jpe?g|ico" + "|png|tiff?|mid|mp2|mp3|mp4" \
                                     + "|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf" \
